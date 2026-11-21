@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>JJK Domains</title>
+  </head>
+  <body>
+    <div id="stage">
+      <video id="cam" autoplay playsinline muted></video>
+      <!-- Domain effects are painted here (between the video and the hand dots) -->
+      <canvas id="fx"></canvas>
+      <canvas id="overlay"></canvas>
+    </div>
+
+    <!-- Screen edges darken as you hold a sign -->
+    <div id="vignette"></div>
+
+    <!-- Malevolent Shrine title sequence -->
+    <div id="shrineText">
+      <div class="de">
+        <span class="half top">DOMAIN EXPANSION</span>
+        <span class="half bot">DOMAIN EXPANSION</span>
+        <i class="line"></i>
+      </div>
+      <i class="cutline"></i>
+      <div class="name" data-text="MALEVOLENT SHRINE">MALEVOLENT SHRINE</div>
+    </div>
+
+    <div id="hud">
+      <span id="status">Loading hand model…</span>
+      <span id="fps"></span>
+    </div>
+
+    <!-- What the classifier thinks right now + the "hold to cast" bar -->
+    <div id="cast">
+      <div id="castLabel">—</div>
+      <div id="castMeta"></div>
+      <div id="holdBar"><div id="holdFill"></div></div>
+    </div>
+
+    <!-- Big text when a domain actually triggers -->
+    <div id="expansion"><small>DOMAIN EXPANSION</small><span id="expansionName"></span></div>
+
+    <!-- Training panel -->
+    <div id="panel">
+      <h3>Train signs</h3>
+      <select id="domainSelect"></select>
+      <button id="recordBtn">● Record (3s)</button>
+      <div id="recordInfo">Pick a sign, hold it, press Record (or Space).</div>
+      <ul id="counts"></ul>
+      <button id="clearBtn" class="ghost">Delete this sign's samples</button>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

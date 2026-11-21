@@ -1,0 +1,230 @@
+html, body {
+  margin: 0;
+  height: 100%;
+  background: #07060b;
+  color: #e9e4ff;
+  font-family: system-ui, sans-serif;
+  overflow: hidden;
+}
+
+#stage {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+}
+
+/* Video and canvas sit exactly on top of each other.
+   scaleX(-1) mirrors them so it feels like a mirror (raise right hand -> right side). */
+#cam, #fx, #overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scaleX(-1);
+}
+
+#cast {
+  position: fixed;
+  top: 56px;
+  left: 50%;
+  transform: translateX(-50%);
+  text-align: center;
+  padding: 10px 20px;
+  background: rgba(0, 0, 0, 0.55);
+  border-radius: 10px;
+  min-width: 260px;
+}
+#castLabel { font-size: 26px; font-weight: 700; letter-spacing: 0.04em; }
+#castMeta { font-size: 12px; opacity: 0.7; margin: 2px 0 6px; }
+#holdBar { height: 6px; background: #ffffff22; border-radius: 3px; overflow: hidden; }
+#holdFill { height: 100%; width: 0; background: linear-gradient(90deg, #7c5cff, #ff3d6e); }
+
+#expansion {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.25s;
+  background: radial-gradient(circle, #00000000 30%, #000000cc 100%);
+}
+#expansion.show { opacity: 1; }
+#expansion small { font-size: 18px; letter-spacing: 0.5em; opacity: 0.8; }
+#expansionName { font-size: 56px; font-weight: 800; text-shadow: 0 0 24px #7c5cff; }
+
+#panel {
+  position: fixed;
+  right: 12px;
+  top: 12px;
+  width: 230px;
+  padding: 12px;
+  background: rgba(0, 0, 0, 0.7);
+  border-radius: 10px;
+  font-size: 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+#panel h3 { margin: 0; font-size: 15px; }
+#panel select, #panel button {
+  font: inherit;
+  padding: 6px;
+  border-radius: 6px;
+  border: 1px solid #ffffff33;
+  background: #1b1726;
+  color: inherit;
+}
+#panel button { cursor: pointer; }
+#recordBtn { background: #ff3d6e; border: none; font-weight: 700; }
+#recordBtn:disabled { opacity: 0.6; }
+#panel .ghost { background: transparent; opacity: 0.7; }
+#counts { margin: 0; padding-left: 18px; opacity: 0.85; }
+
+#hud {
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  display: flex;
+  gap: 16px;
+  padding: 8px 12px;
+  background: rgba(0, 0, 0, 0.55);
+  border-radius: 8px;
+  font-size: 14px;
+}
+
+/* ---------- Charging vignette ----------
+   A radial gradient: clear in the middle, dark at the edges.
+   JS sets --v (0..1) as you hold a sign; opacity + how far in the dark reaches both grow. */
+#vignette {
+  --v: 0;
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  opacity: var(--v);
+  background: radial-gradient(
+    ellipse at center,
+    transparent calc(55% - 30% * var(--v)),
+    rgba(20, 0, 0, 0.75) calc(85% - 20% * var(--v)),
+    #000 100%
+  );
+}
+
+/* ---------- Malevolent Shrine title ---------- */
+#shrineText {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  display: none;
+  font-family: 'Times New Roman', serif;
+}
+#shrineText.on { display: block; }
+
+/* "DOMAIN EXPANSION": thin, wide-spaced, with a thin line growing under it */
+#shrineText .de {
+  position: absolute;
+  left: 50%;
+  top: 38%;
+  transform: translate(-50%, -50%);
+  white-space: nowrap;
+}
+#shrineText .half {
+  display: block;
+  font-size: 30px;
+  font-weight: 300;
+  letter-spacing: 0.6em;
+  color: #fff;
+  opacity: 0;
+  transition: transform 0.45s cubic-bezier(.2,.9,.3,1), opacity 0.45s;
+}
+/* both halves are the SAME text stacked; each is clipped to one side of a diagonal cut */
+#shrineText .bot { position: absolute; left: 0; top: 0; }
+#shrineText .top { clip-path: polygon(0 0, 100% 0, 100% 35%, 0 75%); }
+#shrineText .bot { clip-path: polygon(0 75%, 100% 35%, 100% 100%, 0 100%); }
+#shrineText .line {
+  display: block;
+  height: 1px;
+  margin-top: 10px;
+  background: #fff;
+  transform: scaleX(0);
+  transition: transform 0.9s ease-out, opacity 0.3s;
+}
+#shrineText.s1 .half { opacity: 1; }
+#shrineText.s1 .line { transform: scaleX(1); }
+
+/* the cut: the two halves slide apart along the slash and fade */
+#shrineText.cut .top { transform: translate(-40px, -14px) rotate(-2deg); opacity: 0; }
+#shrineText.cut .bot { transform: translate(40px, 14px) rotate(2deg); opacity: 0; }
+#shrineText.cut .line { opacity: 0; }
+
+#shrineText .cutline {
+  position: absolute;
+  left: -10%;
+  top: 38%;
+  width: 120%;
+  height: 3px;
+  background: #fff;
+  box-shadow: 0 0 12px #fff, 0 0 30px #ff1a1a;
+  transform: rotate(-4deg) scaleX(0);
+  transform-origin: left center;
+  opacity: 0;
+}
+#shrineText.cut .cutline { animation: cutline 0.35s ease-out forwards; }
+@keyframes cutline {
+  0%   { transform: rotate(-4deg) scaleX(0); opacity: 1; }
+  60%  { transform: rotate(-4deg) scaleX(1); opacity: 1; }
+  100% { transform: rotate(-4deg) scaleX(1); opacity: 0; }
+}
+
+/* "MALEVOLENT SHRINE": heavy, red/black, glitching */
+#shrineText .name {
+  position: absolute;
+  left: 50%;
+  top: 52%;
+  transform: translate(-50%, -50%);
+  white-space: nowrap;
+  font-size: 72px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  color: #c00000;
+  -webkit-text-stroke: 2px #000;
+  text-shadow: 0 0 18px #ff000088, 4px 4px 0 #000;
+  opacity: 0;
+}
+#shrineText.s2 .name { animation: nameIn 0.5s steps(6) forwards, distort 0.9s steps(2) 0.5s infinite; }
+/* ::before / ::after = two extra copies of the text, offset + sliced. Classic glitch trick. */
+#shrineText .name::before,
+#shrineText .name::after {
+  content: attr(data-text);
+  position: absolute;
+  inset: 0;
+}
+#shrineText .name::before { color: #000; -webkit-text-stroke: 0; transform: translate(-5px, 0); clip-path: inset(0 0 60% 0); }
+#shrineText .name::after  { color: #ff2a2a; -webkit-text-stroke: 0; transform: translate(5px, 0); clip-path: inset(55% 0 0 0); }
+#shrineText.s2 .name::before { animation: sliceA 0.6s steps(3) infinite; }
+#shrineText.s2 .name::after  { animation: sliceB 0.7s steps(3) infinite; }
+
+@keyframes nameIn {
+  0%   { opacity: 0; transform: translate(-50%, -50%) scale(1.6) skewX(-20deg); filter: blur(6px); }
+  100% { opacity: 1; transform: translate(-50%, -50%) scale(1) skewX(0); filter: blur(0); }
+}
+@keyframes distort {
+  0%   { transform: translate(-50%, -50%) skewX(0) scaleY(1); }
+  50%  { transform: translate(-51%, -50%) skewX(-6deg) scaleY(1.06); }
+  100% { transform: translate(-49%, -50%) skewX(3deg) scaleY(0.97); }
+}
+@keyframes sliceA {
+  0% { clip-path: inset(0 0 70% 0); transform: translate(-6px, 0); }
+  50% { clip-path: inset(30% 0 40% 0); transform: translate(4px, 0); }
+  100% { clip-path: inset(60% 0 10% 0); transform: translate(-3px, 0); }
+}
+@keyframes sliceB {
+  0% { clip-path: inset(50% 0 20% 0); transform: translate(6px, 0); }
+  50% { clip-path: inset(10% 0 75% 0); transform: translate(-5px, 0); }
+  100% { clip-path: inset(80% 0 0 0); transform: translate(3px, 0); }
+}
+/* once the chaos takes over, the title fades away (and blurs a bit as it goes) */
+#shrineText.fade { opacity: 0; filter: blur(3px); transition: opacity 1.2s ease-in, filter 1.2s; }
