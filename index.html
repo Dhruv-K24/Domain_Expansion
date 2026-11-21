@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>JJK Domains</title>
+    <script type="module" crossorigin src="./assets/main-S4AHtGh5.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/main-Dh5NbWHC.css">
+  </head>
+  <body>
+    <div id="stage">
+      <video id="cam" autoplay playsinline muted></video>
+      <!-- Domain effects are painted here (between the video and the hand dots) -->
+      <canvas id="fx"></canvas>
+      <!-- the same effects after GPU shaders (bloom, heat haze). When WebGL works, #fx is hidden -->
+      <canvas id="fxgl"></canvas>
+      <canvas id="overlay"></canvas>
+    </div>
+
+    <!-- Screen edges darken as you hold a sign -->
+    <div id="vignette"></div>
+
+    <!-- Status + fps bar (top left). Domain titles are created by src/fx/domainTitle.ts -->
+    <div id="hud">
+      <span id="status">Loading hand model…</span>
+      <span id="fps"></span>
+    </div>
+
+    <!-- What the classifier thinks right now + the "hold to cast" bar -->
+    <div id="cast">
+      <div id="castLabel">—</div>
+      <div id="castMeta"></div>
+      <div id="holdBar"><div id="holdFill"></div></div>
+    </div>
+
+    <!-- Big text when a domain actually triggers -->
+    <div id="expansion"><small>DOMAIN EXPANSION</small><span id="expansionName"></span></div>
+
+    <!-- Training panel -->
+    <div id="panel">
+      <h3>Train signs</h3>
+      <select id="domainSelect"></select>
+      <button id="recordBtn">● Record (3s)</button>
+      <div id="recordInfo">Pick a sign, hold it, press Record (or Space).</div>
+      <ul id="counts"></ul>
+      <button id="clearBtn" class="ghost">Delete this sign's samples</button>
+    </div>
+
+  </body>
+</html>
