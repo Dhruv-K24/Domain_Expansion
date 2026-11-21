@@ -113,118 +113,99 @@ html, body {
   );
 }
 
-/* ---------- Malevolent Shrine title ---------- */
-#shrineText {
+/* ---------- Domain title (src/fx/domainTitle.ts) ----------
+   LAYOUT + TIMING are shared by every domain. Each domain only adds a THEME block below
+   (.theme-void, .theme-shrine) that changes colours/fonts. New domain = new theme block. */
+.domain-title {
   position: fixed;
   inset: 0;
   pointer-events: none;
   display: none;
-  font-family: 'Times New Roman', serif;
+  text-align: center;
+  color: #fff;
 }
-#shrineText.on { display: block; }
-
-/* "DOMAIN EXPANSION": thin, wide-spaced, with a thin line growing under it */
-#shrineText .de {
+.domain-title.on { display: block; }
+.domain-title .de, .domain-title .name {
   position: absolute;
   left: 50%;
-  top: 38%;
-  transform: translate(-50%, -50%);
+  transform: translateX(-50%);
   white-space: nowrap;
 }
-#shrineText .half {
+.domain-title .de { top: 74%; }
+.domain-title .half {
   display: block;
-  font-size: 30px;
+  font-size: 18px;
   font-weight: 300;
-  letter-spacing: 0.6em;
-  color: #fff;
+  letter-spacing: 0.7em;
   opacity: 0;
-  transition: transform 0.45s cubic-bezier(.2,.9,.3,1), opacity 0.45s;
+  transition: opacity 0.6s, transform 0.45s cubic-bezier(.2,.9,.3,1);
 }
-/* both halves are the SAME text stacked; each is clipped to one side of a diagonal cut */
-#shrineText .bot { position: absolute; left: 0; top: 0; }
-#shrineText .top { clip-path: polygon(0 0, 100% 0, 100% 35%, 0 75%); }
-#shrineText .bot { clip-path: polygon(0 75%, 100% 35%, 100% 100%, 0 100%); }
-#shrineText .line {
-  display: block;
-  height: 1px;
-  margin-top: 10px;
-  background: #fff;
-  transform: scaleX(0);
-  transition: transform 0.9s ease-out, opacity 0.3s;
-}
-#shrineText.s1 .half { opacity: 1; }
-#shrineText.s1 .line { transform: scaleX(1); }
+/* DE is two stacked copies, each clipped to one side of a diagonal, so it can be cut in half */
+.domain-title .bot { position: absolute; left: 0; top: 0; }
+.domain-title .top { clip-path: polygon(0 0, 100% 0, 100% 35%, 0 75%); }
+.domain-title .bot { clip-path: polygon(0 75%, 100% 35%, 100% 100%, 0 100%); }
+.domain-title .name { top: 79%; font-size: 46px; letter-spacing: 0.3em; opacity: 0; transition: opacity 0.6s; }
+.domain-title.s1 .half { opacity: 0.85; }
+.domain-title.s2 .name { opacity: 1; }
+.domain-title.fade { opacity: 0; transition: opacity 1.4s; }
 
-/* the cut: the two halves slide apart along the slash and fade */
-#shrineText.cut .top { transform: translate(-40px, -14px) rotate(-2deg); opacity: 0; }
-#shrineText.cut .bot { transform: translate(40px, 14px) rotate(2deg); opacity: 0; }
-#shrineText.cut .line { opacity: 0; }
-
-#shrineText .cutline {
+/* the optional cut (Malevolent Shrine): halves slide apart along the slash */
+.domain-title.cut .top { transform: translate(-40px, -6px) rotate(-2deg); opacity: 0; }
+.domain-title.cut .bot { transform: translate(40px, 6px) rotate(2deg); opacity: 0; }
+.domain-title .cutline {
   position: absolute;
-  left: -10%;
-  top: 38%;
-  width: 120%;
-  height: 3px;
+  left: 20%;
+  top: 75.5%;
+  width: 60%;
+  height: 2px;
   background: #fff;
-  box-shadow: 0 0 12px #fff, 0 0 30px #ff1a1a;
-  transform: rotate(-4deg) scaleX(0);
+  box-shadow: 0 0 10px #fff, 0 0 24px #ff1a1a;
+  transform: rotate(-3deg) scaleX(0);
   transform-origin: left center;
   opacity: 0;
 }
-#shrineText.cut .cutline { animation: cutline 0.35s ease-out forwards; }
+.domain-title.cut .cutline { animation: cutline 0.35s ease-out forwards; }
 @keyframes cutline {
-  0%   { transform: rotate(-4deg) scaleX(0); opacity: 1; }
-  60%  { transform: rotate(-4deg) scaleX(1); opacity: 1; }
-  100% { transform: rotate(-4deg) scaleX(1); opacity: 0; }
+  0%   { transform: rotate(-3deg) scaleX(0); opacity: 1; }
+  60%  { transform: rotate(-3deg) scaleX(1); opacity: 1; }
+  100% { transform: rotate(-3deg) scaleX(1); opacity: 0; }
 }
 
-/* "MALEVOLENT SHRINE": heavy, red/black, glitching */
-#shrineText .name {
-  position: absolute;
-  left: 50%;
-  top: 52%;
-  transform: translate(-50%, -50%);
-  white-space: nowrap;
-  font-size: 72px;
+/* THEME: Unlimited Void — thin, white, cold blue/violet glow */
+.theme-void { font-family: 'Segoe UI', system-ui, sans-serif; }
+.theme-void .name {
+  font-weight: 200;
+  letter-spacing: 0.35em;
+  text-shadow: 0 0 10px #cfe0ff, 0 0 26px #8fb0ff, 0 0 50px #b49cff;
+}
+
+/* THEME: Malevolent Shrine — heavy serif, black letters, red glow, completely still */
+.theme-shrine { font-family: 'Times New Roman', serif; }
+.theme-shrine .name {
   font-weight: 900;
-  letter-spacing: 0.08em;
-  color: #c00000;
-  -webkit-text-stroke: 2px #000;
-  text-shadow: 0 0 18px #ff000088, 4px 4px 0 #000;
-  opacity: 0;
+  letter-spacing: 0.12em;
+  color: #000;
+  text-shadow: 0 0 4px #ff1a1a, 0 0 10px #e00000, 0 0 22px #b00000, 0 0 44px #700000;
 }
-#shrineText.s2 .name { animation: nameIn 0.5s steps(6) forwards, distort 0.9s steps(2) 0.5s infinite; }
-/* ::before / ::after = two extra copies of the text, offset + sliced. Classic glitch trick. */
-#shrineText .name::before,
-#shrineText .name::after {
-  content: attr(data-text);
-  position: absolute;
-  inset: 0;
-}
-#shrineText .name::before { color: #000; -webkit-text-stroke: 0; transform: translate(-5px, 0); clip-path: inset(0 0 60% 0); }
-#shrineText .name::after  { color: #ff2a2a; -webkit-text-stroke: 0; transform: translate(5px, 0); clip-path: inset(55% 0 0 0); }
-#shrineText.s2 .name::before { animation: sliceA 0.6s steps(3) infinite; }
-#shrineText.s2 .name::after  { animation: sliceB 0.7s steps(3) infinite; }
 
-@keyframes nameIn {
-  0%   { opacity: 0; transform: translate(-50%, -50%) scale(1.6) skewX(-20deg); filter: blur(6px); }
-  100% { opacity: 1; transform: translate(-50%, -50%) scale(1) skewX(0); filter: blur(0); }
+/* THEME: Chimera Shadow Garden — black & white, manga style: white letters, hard black outline + flat drop shadow */
+.theme-chimera { font-family: 'Arial Black', 'Segoe UI', sans-serif; }
+.theme-chimera .half { color: #fff; text-shadow: 1px 1px 0 #000, -1px -1px 0 #000, 2px 2px 0 #000; }
+.theme-chimera .name {
+  font-weight: 900;
+  letter-spacing: 0.16em;
+  color: #fff;
+  -webkit-text-stroke: 1.5px #000;
+  text-shadow: 4px 4px 0 #000;
 }
-@keyframes distort {
-  0%   { transform: translate(-50%, -50%) skewX(0) scaleY(1); }
-  50%  { transform: translate(-51%, -50%) skewX(-6deg) scaleY(1.06); }
-  100% { transform: translate(-49%, -50%) skewX(3deg) scaleY(0.97); }
+
+/* THEME: Coffin of the Iron Mountain — molten orange letters, thick black outline, warm glow */
+.theme-coffin { font-family: Impact, 'Arial Black', sans-serif; }
+.theme-coffin .half { color: #ffb347; text-shadow: 0 0 2px #000, 1px 1px 0 #000, -1px -1px 0 #000; }
+.theme-coffin .name {
+  font-size: 40px;
+  letter-spacing: 0.1em;
+  color: #ff8a1c;
+  -webkit-text-stroke: 2px #000;
+  text-shadow: 3px 3px 0 #000, 0 0 18px rgba(255, 120, 0, 0.55);
 }
-@keyframes sliceA {
-  0% { clip-path: inset(0 0 70% 0); transform: translate(-6px, 0); }
-  50% { clip-path: inset(30% 0 40% 0); transform: translate(4px, 0); }
-  100% { clip-path: inset(60% 0 10% 0); transform: translate(-3px, 0); }
-}
-@keyframes sliceB {
-  0% { clip-path: inset(50% 0 20% 0); transform: translate(6px, 0); }
-  50% { clip-path: inset(10% 0 75% 0); transform: translate(-5px, 0); }
-  100% { clip-path: inset(80% 0 0 0); transform: translate(3px, 0); }
-}
-/* once the chaos takes over, the title fades away (and blurs a bit as it goes) */
-#shrineText.fade { opacity: 0; filter: blur(3px); transition: opacity 1.2s ease-in, filter 1.2s; }

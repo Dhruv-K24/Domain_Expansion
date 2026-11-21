@@ -21,13 +21,22 @@ export class Caster {
   private castUntil = 0
   private last = performance.now()
 
+  private armed = true // false right after a cast, until you let go of the sign
+
   update(p: Prediction, now: number): CastState {
-    const dt = now - this.last
+    // Cap the time step: if updates paused (e.g. during the domain), the first update after
+    // must not count the whole pause as "holding" — that instantly re-cast the domain.
+    const dt = Math.min(now - this.last, 100)
     this.last = now
 
     if (now < this.castUntil) return { phase: 'cast', label: this.label, progress: 1 }
 
     const good = p.label !== 'none' && p.confidence >= CAST.minConfidence
+    // Must release the sign after a cast before it can charge again (no accidental double cast).
+    if (!this.armed) {
+      if (!good) this.armed = true
+      return { phase: 'idle', label: this.label, progress: 0 }
+    }
     if (good && p.label === this.label) {
       this.progress += dt / CAST.holdMs // keep holding -> fill
     } else if (good && this.progress <= 0) {
@@ -40,6 +49,7 @@ export class Caster {
     if (this.progress >= 1) {
       this.castUntil = now + CAST.cooldownMs
       this.progress = 0
+      this.armed = false
       return { phase: 'cast', label: this.label, progress: 1 }
     }
     return { phase: this.progress > 0 ? 'charging' : 'idle', label: this.label, progress: this.progress }

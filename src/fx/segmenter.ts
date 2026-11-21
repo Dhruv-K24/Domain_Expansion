@@ -13,8 +13,12 @@ const MODEL =
   'https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_segmenter/float16/latest/selfie_segmenter.tflite'
 
 export class BodyMask {
-  canvas = document.createElement('canvas')
+  canvas = document.createElement('canvas')            // the finished, feathered mask (what domains use)
   private ctx = this.canvas.getContext('2d')!
+  private raw = document.createElement('canvas')        // unblurred mask, before feathering
+  private rawCtx = this.raw.getContext('2d')!
+  private prev: Float32Array | null = null              // last frame's confidence, for smoothing
+  private hasPrev = false
   private seg: ImageSegmenter | null = null
   private img: ImageData | null = null
   ready = false
@@ -29,6 +33,12 @@ export class BodyMask {
     })
   }
 
+  /** forget the old mask (new cast: don't flash or blend in the silhouette from last time) */
+  reset() {
+    this.ready = false
+    this.hasPrev = false
+  }
+
   /** Update the mask from the current video frame. */
   update(video: HTMLVideoElement, now: number) {
     if (!this.seg) return
@@ -37,22 +47,40 @@ export class BodyMask {
     this.seg.segmentForVideo(video, now, (result) => {
       const mask = result.confidenceMasks?.[0]
       if (!mask) return
+      // Half resolution (1/4 of the work). Three things keep the edge clean:
+      //  1. AVERAGE each 2x2 block instead of picking one pixel -> anti-aliased, no staircase
+      //  2. TEMPORAL SMOOTHING: blend 65% new + 35% last frame -> edges stop flickering
+      //     (weighted toward NEW so a fast-moving hand doesn't leave a ghost trail)
+      //  3. FEATHER: soft confidence curve + a small blur when copying to the output canvas
       const { width, height } = mask
-      if (this.canvas.width !== width || this.canvas.height !== height) {
-        this.canvas.width = width
-        this.canvas.height = height
-        this.img = this.ctx.createImageData(width, height)
+      const W = width >> 1, H = height >> 1
+      if (this.raw.width !== W || this.raw.height !== H) {
+        this.raw.width = this.canvas.width = W
+        this.raw.height = this.canvas.height = H
+        this.img = this.rawCtx.createImageData(W, H)
+        this.img.data.fill(255) // RGB stays white forever; we only update alpha below
+        this.prev = new Float32Array(W * H)
+        this.hasPrev = false
       }
       const conf = mask.getAsFloat32Array()
-      const px = this.img!.data
-      for (let i = 0; i < conf.length; i++) {
-        // sharpen the edge a bit: 0.3..0.7 confidence stretched to 0..1
-        const a = Math.min(1, Math.max(0, (conf[i] - 0.3) / 0.4))
-        const j = i * 4
-        px[j] = px[j + 1] = px[j + 2] = 255
-        px[j + 3] = a * 255
+      const px = this.img!.data, prev = this.prev!
+      for (let y = 0; y < H; y++) {
+        const r0 = y * 2 * width, r1 = r0 + width
+        for (let x = 0; x < W; x++) {
+          const i = y * W + x, x2 = x * 2
+          let c = (conf[r0 + x2] + conf[r0 + x2 + 1] + conf[r1 + x2] + conf[r1 + x2 + 1]) * 0.25
+          if (this.hasPrev) c = c * 0.65 + prev[i] * 0.35
+          prev[i] = c
+          // soft edge: 0.2..0.8 confidence -> 0..1 (wider ramp than before = no hard stair edge)
+          px[i * 4 + 3] = c <= 0.2 ? 0 : c >= 0.8 ? 255 : (c - 0.2) * 425
+        }
       }
-      this.ctx.putImageData(this.img!, 0, 0)
+      this.hasPrev = true
+      this.rawCtx.putImageData(this.img!, 0, 0)
+      this.ctx.clearRect(0, 0, W, H)
+      this.ctx.filter = 'blur(1px)' // feather (1px at half res = 2px on screen)
+      this.ctx.drawImage(this.raw, 0, 0)
+      this.ctx.filter = 'none'
       this.ready = true
     })
   }

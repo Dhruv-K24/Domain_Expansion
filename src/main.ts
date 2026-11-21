@@ -7,7 +7,12 @@ import { classify, type Sample } from './signs/knn'
 import { DOMAINS, domainName, loadDataset, appendSamples, deleteLabel } from './signs/dataset'
 import { Caster } from './signs/caster'
 import { BodyMask } from './fx/segmenter'
+import { FaceTracker } from './fx/faceTracker'
+import type { Domain } from './domains/domain'
 import { MalevolentShrine } from './domains/malevolentShrine'
+import { UnlimitedVoid } from './domains/unlimitedVoid'
+import { ChimeraShadowGarden } from './domains/chimeraShadowGarden'
+import { CoffinIronMountain } from './domains/coffinIronMountain'
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T
 const video = $<HTMLVideoElement>('cam')
@@ -164,11 +169,16 @@ clearBtn.onclick = async () => {
 }
 
 let showRaw = false
-let testCast = false // press T to fire Malevolent Shrine without doing the sign (for testing visuals)
+// test keys: fire a domain without doing the sign (for testing visuals)
+// T = Malevolent Shrine, Y = Unlimited Void, U = Chimera Shadow Garden, I = Coffin of the Iron Mountain
+let testCast: string | null = null
 window.addEventListener('keydown', (e) => {
   if (e.target instanceof HTMLSelectElement) return
   if (e.key.toLowerCase() === 'r') showRaw = !showRaw
-  if (e.key.toLowerCase() === 't') testCast = true
+  if (e.key.toLowerCase() === 't') testCast = 'malevolent_shrine'
+  if (e.key.toLowerCase() === 'y') testCast = 'infinite_void'
+  if (e.key.toLowerCase() === 'u') testCast = 'chimera_shadow_garden'
+  if (e.key.toLowerCase() === 'i') testCast = 'coffin_iron_mountain'
   if (e.code === 'Space') { e.preventDefault(); startRecording() }
 })
 
@@ -181,12 +191,17 @@ async function main() {
     const draw = new DrawingUtils(ctx)
     const tracker = new HandTracker()
     const caster = new Caster()
-    const shrine = new MalevolentShrine()
+    // Every domain with a full effect. Adding one = write its file + add it here.
+    const domains: Domain[] = [new MalevolentShrine(), new UnlimitedVoid(), new ChimeraShadowGarden(), new CoffinIronMountain()]
+    const activeDomain = () => domains.find((d) => d.active) ?? null
+    const domainActive = () => activeDomain() !== null
+    const face = new FaceTracker()
+    face.load(det.delegate).catch((e) => console.warn('face tracker failed to load', e))
     const body = new BodyMask()
     body.load(det.delegate).catch((e) => console.warn('segmenter failed to load', e)) // loads in background
     let wasCast = false
     let lastFrame = performance.now()
-    const ui = document.querySelectorAll<HTMLElement>('#panel, #cast, #hud')
+    let segTick = 0
 
     let lastVideoTime = -1
     let hands: TrackedHand[] = []
@@ -197,8 +212,20 @@ async function main() {
     function loop() {
       const now = performance.now()
 
-      if (video.currentTime !== lastVideoTime) {
-        lastVideoTime = video.currentTime
+      const newFrame = video.currentTime !== lastVideoTime
+      if (newFrame) lastVideoTime = video.currentTime
+
+      // PERFORMANCE: during a domain we don't need hand tracking (nothing reads it), and the
+      // body segmenter is the expensive part. Measured: hands ~14ms + segmenter ~16ms per frame
+      // = the whole 30fps budget. So: pause hands, and segment only every 2nd camera frame
+      // (your silhouette barely moves in 1/15th of a second, nobody can tell).
+      if (newFrame && domainActive()) {
+        // take turns: segmenter on even frames, face tracker on odd frames (if the domain needs it)
+        // -> each model runs at half rate, so the frame never has to fit both
+        const d = activeDomain()!
+        if (++segTick % 2 === 0 || !d.needsFace) body.update(video, now)
+        else face.update(video, now)
+      } else if (newFrame) {
         const result = det.video.detectForVideo(video, now)
         const landmarks: NormalizedLandmark[][] = [...result.landmarks]
         const handedness: Category[][] = [...result.handedness]
@@ -245,32 +272,43 @@ async function main() {
         // Vignette: nothing for the first half of the hold, then edges darken 50% -> 100%.
         // smoothstep = an S-curve, so it eases in instead of starting abruptly.
         const k = Math.max(0, (state.progress - 0.5) / 0.5)
-        const v = state.phase === 'cast' ? (shrine.active ? 0 : 1) : k * k * (3 - 2 * k)
+        const v = state.phase === 'cast' ? (domainActive() ? 0 : 1) : k * k * (3 - 2 * k)
         vignette.style.setProperty('--v', v.toFixed(3))
 
         // Did a cast JUST happen this frame? (phase went from not-cast to cast)
-        const castNow = (state.phase === 'cast' && !wasCast) || testCast
+        const castNow = (state.phase === 'cast' && !wasCast) || testCast !== null
         wasCast = state.phase === 'cast'
         if (castNow) {
-          const label = testCast ? 'malevolent_shrine' : state.label
-          testCast = false
-          if (label === 'malevolent_shrine') shrine.start(fxCanvas.width, fxCanvas.height)
-          else {
+          const label = testCast ?? state.label
+          testCast = null
+          const domain = domains.find((d) => d.id === label)
+          const fancy = !!domain
+          if (domain && !domainActive()) {
+            body.reset() // don't flash or blend in the silhouette left over from the LAST domain
+            body.update(video, now)
+            face.clear()
+            if (domain.needsFace) face.update(video, now)
+            domain.start(fxCanvas.width, fxCanvas.height)
+            vignette.style.setProperty('--v', '0')
+          }
+          else if (!fancy) {
             expansionName.textContent = domainName(label)
             expansion.classList.add('show')
             setTimeout(() => expansion.classList.remove('show'), 3000)
           }
         }
-        if (shrine.active) body.update(video, now)
       }
 
       // ---- Drawing ----
       const dt = now - lastFrame
       lastFrame = now
-      shrine.render(fxCtx, video, body.ready ? body.canvas : null, dt)
-      ui.forEach((el) => (el.style.visibility = shrine.active ? 'hidden' : 'visible'))
+      // only ONE domain draws per frame (each one starts by clearing the effects canvas)
+      const inputs = { video, mask: body.ready ? body.canvas : null, face: face.face }
+      const active = activeDomain()
+      if (active) active.render(fxCtx, inputs, dt)
+      else for (const d of domains) d.render(fxCtx, inputs, dt) // lets a just-finished domain clean up
       ctx.clearRect(0, 0, canvas.width, canvas.height)
-      if (shrine.active) { requestAnimationFrame(loop); return } // no hand dots during the domain
+      if (domainActive()) { requestAnimationFrame(loop); return } // no hand dots during the domain
       if (showRaw) for (const r of raw) draw.drawLandmarks(r, { color: '#888', radius: 2 })
       for (const h of hands) {
         ctx.globalAlpha = h.coasting ? 0.25 + 0.5 * h.confidence : 1

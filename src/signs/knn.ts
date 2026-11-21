@@ -43,11 +43,31 @@ export function classify(samples: Sample[], f: number[], k = 7, maxDistance = 4)
     .sort((a, b) => a.d - b.d)
     .slice(0, k)
 
+  // CLASS BALANCING: if "none" has 10x more samples than a sign, it naturally shows up more
+  // often among the nearest neighbours just by being everywhere. So each vote is weighted by
+  // 1/sqrt(how many samples that label has). sqrt = a middle ground between no correction
+  // and full 1/count correction (full correction over-boosts tiny classes).
+  const counts = classCounts(samples)
   const votes = new Map<string, number>()
-  for (const n of nearest) votes.set(n.label, (votes.get(n.label) ?? 0) + 1)
-  const [label, count] = [...votes.entries()].sort((a, b) => b[1] - a[1])[0]
+  let totalWeight = 0
+  for (const n of nearest) {
+    const wgt = 1 / Math.sqrt(counts.get(n.label) ?? 1)
+    votes.set(n.label, (votes.get(n.label) ?? 0) + wgt)
+    totalWeight += wgt
+  }
+  const [label, weight] = [...votes.entries()].sort((a, b) => b[1] - a[1])[0]
   const closest = nearest[0].d
 
   if (closest > maxDistance) return { label: 'none', confidence: 0, distance: closest }
-  return { label, confidence: count / nearest.length, distance: closest }
+  return { label, confidence: weight / totalWeight, distance: closest }
+}
+
+// counting labels on every call would be wasteful, so remember the result per dataset size
+let countsCache: { arr: Sample[]; len: number; counts: Map<string, number> } | null = null
+function classCounts(samples: Sample[]) {
+  if (countsCache && countsCache.arr === samples && countsCache.len === samples.length) return countsCache.counts
+  const counts = new Map<string, number>()
+  for (const s of samples) counts.set(s.label, (counts.get(s.label) ?? 0) + 1)
+  countsCache = { arr: samples, len: samples.length, counts }
+  return counts
 }
