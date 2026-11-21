@@ -58,8 +58,12 @@ function readBody(req: import('node:http').IncomingMessage): Promise<any> {
   })
 }
 
+// build stamp shown in the app (e.g. "v11-21 17:05"), so you can see which version is running
+const BUILD = new Date().toLocaleString('en-GB', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).replaceAll('/', '-').replace(',', '')
+
 export default defineConfig({
-  base: './', // relative paths: the built app works from any folder or host
+  base: './',
+  define: { __BUILD__: JSON.stringify(BUILD) }, // relative paths: the built app works from any folder or host
   // laptop: 127.0.0.1 (Claude's preview tool can't reach an IPv6-only server)
   // phone:  all network interfaces, so your phone can reach your PC over Wi-Fi
   server: { host: PHONE ? true : '127.0.0.1', watch: { ignored: ['**/data/**'] } },

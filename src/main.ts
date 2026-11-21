@@ -23,6 +23,8 @@ const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as 
 const PLAY = document.body.classList.contains('play')
 // phone.html?debug shows the HUD + guess box on the phone, so you can see fps and what it thinks
 if (PLAY && new URLSearchParams(location.search).has('debug')) document.body.classList.add('debug')
+const versionEl = document.getElementById('version')
+if (versionEl) versionEl.textContent = `v${__BUILD__}`
 const video = $<HTMLVideoElement>('cam')
 const canvas = $<HTMLCanvasElement>('overlay')
 const ctx = canvas.getContext('2d')!
@@ -342,7 +344,7 @@ async function main() {
         hands.length === 0 ? 'No hands' : hands.map((h) => `${h.label}${h.coasting ? ' (predicting)' : ''}`).join(' + ')
 
       if (now - fpsTimer > 1000) {
-        fpsEl.textContent = `detect ${detFrames} fps · draw ${renderFrames} fps · ${det.delegate} · recovered ${recovered}/s · [R] raw`
+        fpsEl.textContent = `v${__BUILD__} · detect ${detFrames} fps · draw ${renderFrames} fps · ${det.delegate} · recovered ${recovered}/s · [R] raw`
         detFrames = renderFrames = recovered = 0
         fpsTimer = now
       }
@@ -368,7 +370,16 @@ async function main() {
 // models are saved on the device. Built app only: in development it would serve stale cached
 // files and hide your code changes.
 if (import.meta.env.PROD && 'serviceWorker' in navigator) {
-  navigator.serviceWorker.register('./sw.js').catch((e) => console.warn('offline mode unavailable', e))
+  // UPDATES: the app answers from its saved copy first (that's what makes it work offline), so
+  // a new version downloads quietly in the background. When it's ready it takes over
+  // ("controllerchange") and we reload once, so you're never stuck on the old version.
+  const hadController = !!navigator.serviceWorker.controller // false on the very first install
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (hadController) location.reload()
+  })
+  navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' })
+    .then((reg) => reg.update()) // check for a new version every time the app opens
+    .catch((e) => console.warn('offline mode unavailable', e))
 }
 
 // Phone: browsers only allow fullscreen + "keep screen awake" after a user gesture, so the

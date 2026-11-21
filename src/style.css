@@ -239,3 +239,4 @@ body.play #tapHint { display: block; }
 body.play.debug #hud, body.play.debug #cast { display: flex !important; }
 body.play.debug #cast { display: block !important; }
 body.play.debug #hud { font-size: 11px; flex-wrap: wrap; max-width: 92vw; }
+#tapHint small { display: block; text-align: center; font-size: 10px; letter-spacing: 0.08em; opacity: 0.6; margin-top: 3px; }

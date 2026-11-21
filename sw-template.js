@@ -18,7 +18,10 @@ const MODELS = __MODELS__ // AI models hosted by Google
 self.addEventListener('install', (event) => {
   event.waitUntil((async () => {
     const cache = await caches.open(CACHE)
-    await cache.addAll(FILES)
+    // cache: 'reload' = ALWAYS download from the server. Without it the browser may hand back a
+    // file it remembered earlier (GitHub lets browsers reuse files for 10 minutes), and the
+    // "new" version would get saved with old files mixed in.
+    await cache.addAll(FILES.map((f) => new Request(f, { cache: 'reload' })))
     // models are big and on another server: don't let one failure break the whole install
     await Promise.allSettled(MODELS.map((url) => cache.add(new Request(url, { mode: 'cors' }))))
     await self.skipWaiting() // use the new version right away
