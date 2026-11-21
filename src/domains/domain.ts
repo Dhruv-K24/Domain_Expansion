@@ -16,6 +16,7 @@ import { BodyLayer } from '../fx/bodyLayer'
 import { ScreenShake } from '../fx/screenShake'
 import { DomainTitle, type TitleTiming } from '../fx/domainTitle'
 import type { Face } from '../fx/faceTracker'
+import { defaultPost, type PostSettings } from '../fx/postFX'
 
 export type DomainInputs = {
   video: HTMLVideoElement
@@ -32,6 +33,7 @@ export type DomainConfig = {
   title: TitleTiming
   cutTitle?: boolean
   needsFace?: boolean
+  post?: Partial<PostSettings> // GPU look: bloom, heat distortion, grading (see postFX.ts)
 }
 
 export abstract class Domain {
@@ -43,6 +45,8 @@ export abstract class Domain {
   protected shake: ScreenShake
   protected title: DomainTitle
   private wasActive = false
+  /** shader settings main.ts reads every frame; a domain may change them while it runs */
+  post: PostSettings = defaultPost()
 
   constructor(cfg: DomainConfig) {
     this.cfg = cfg
@@ -72,6 +76,7 @@ export abstract class Domain {
     this.w = w
     this.h = h
     this.wasActive = true
+    this.post = { ...defaultPost(), ...this.cfg.post }
     this.title.play()
     this.onStart()
   }
@@ -91,7 +96,5 @@ export abstract class Domain {
   protected onEnd(): void {}
 }
 
-// small math helpers every domain uses
-export const clamp01 = (v: number) => Math.max(0, Math.min(1, v))
-export const rand = (a: number, b: number) => a + Math.random() * (b - a)
-export const easeOut = (k: number) => 1 - (1 - k) * (1 - k)
+// small math helpers every domain uses (re-exported so domains import everything from here)
+export { clamp01, rand, easeOut } from '../util/math'

@@ -17,7 +17,7 @@
 export type Pt = { x: number; y: number; t: number } // t = 0..1, position along the spine
 export type Blade = { top: Pt[]; bottom: Pt[] }
 
-const rand = (a: number, b: number) => a + Math.random() * (b - a)
+import { rand } from '../util/math'
 
 /** thickness at t (0..1): 0 at the tips, peak at `peak`, curved like a crescent */
 function profile(t: number, peak: number) {

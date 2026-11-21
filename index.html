@@ -10,6 +10,8 @@
       <video id="cam" autoplay playsinline muted></video>
       <!-- Domain effects are painted here (between the video and the hand dots) -->
       <canvas id="fx"></canvas>
+      <!-- the same effects after GPU shaders (bloom, heat haze). When WebGL works, #fx is hidden -->
+      <canvas id="fxgl"></canvas>
       <canvas id="overlay"></canvas>
     </div>
 

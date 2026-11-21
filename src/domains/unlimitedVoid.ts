@@ -15,6 +15,7 @@
 
 import { Domain, clamp01, rand, easeOut, type DomainInputs } from './domain'
 import { NoiseDissolve } from '../fx/noiseDissolve'
+import { GojoEyes } from '../fx/gojoEyes'
 
 const T = {
   burst: 1500,      // white build-up length
@@ -39,6 +40,8 @@ export class UnlimitedVoid extends Domain {
     centreBias: 2.2,
   })
 
+  private gojo = new GojoEyes()
+
   constructor() {
     super({
       id: 'infinite_void',
@@ -47,6 +50,8 @@ export class UnlimitedVoid extends Domain {
       duration: T.end,
       fadeOut: 900,
       title: { showDE: 1700, showName: 2500, fade: 6800, end: T.end },
+      post: { bloom: 1.1, threshold: 0.5, contrast: 1.05, vignette: 0.35 },
+      needsFace: true, // for Gojo's eyes
     })
   }
 
@@ -55,6 +60,7 @@ export class UnlimitedVoid extends Domain {
     this.bakeTextures()
     this.streaks = Array.from({ length: 70 }, () => this.newStreak(true))
     this.ink.reseed() // new random splatter pattern every cast
+    this.gojo.reset()
   }
 
   // ---------- textures baked once per cast ----------
@@ -108,7 +114,7 @@ export class UnlimitedVoid extends Domain {
   }
 
   // ---------- per frame ----------
-  protected draw(ctx: CanvasRenderingContext2D, { video, mask }: DomainInputs, t: number, dtMs: number) {
+  protected draw(ctx: CanvasRenderingContext2D, { video, mask, face }: DomainInputs, t: number, dtMs: number) {
     const { w, h } = this
     const dt = dtMs / 1000
     // CAMERA: during the build it slowly pushes IN (pressure). At the burst it snaps to a wide
@@ -129,16 +135,19 @@ export class UnlimitedVoid extends Domain {
     }
 
     const tv = t - T.burst
-    const fade = this.endFade
-    ctx.globalAlpha = fade
+    // Draw the whole scene at FULL strength (no per-layer fading). If the void and your body
+    // faded separately, your half-transparent body would let the black hole show THROUGH you.
+    ctx.globalAlpha = 1
     this.drawVoid(ctx, tv, w, h, dt)
-    if (mask) this.body.draw(ctx, video, mask, w, h, fade, '#d6e6ff')
+    // you: a black silhouette with a cold white rim, and Gojo's eyes on your eyes
+    if (mask) this.body.draw(ctx, video, mask, w, h, 1, '#d6e6ff', undefined, true)
+    this.gojo.draw(ctx, face, clamp01(tv / 400), t / 1000)
 
     // white burst layer over everything, dissolving like ink (threshold sweeps fast, then slows)
     const k = tv / T.splatter
     if (k < 1) {
       ctx.save()
-      ctx.globalAlpha = fade * (1 - k * k * k)
+      ctx.globalAlpha = 1 - k * k * k
       this.ink.draw(ctx, -1.2 + easeOut(k) * 3.4, 'above', 6, [245, 248, 255])
       ctx.restore()
     }
@@ -149,6 +158,18 @@ export class UnlimitedVoid extends Domain {
       ctx.globalAlpha = flash * flash
       ctx.fillStyle = '#fff'
       ctx.fillRect(0, 0, w, h)
+    }
+
+    // ...then fade the FINISHED picture as one layer. 'destination-in' keeps what's already
+    // drawn, multiplied by this alpha -> everything disappears together, you stay in front.
+    const fade = this.endFade
+    if (fade < 1) {
+      ctx.save()
+      ctx.globalCompositeOperation = 'destination-in'
+      ctx.globalAlpha = fade
+      ctx.fillStyle = '#000'
+      ctx.fillRect(0, 0, w, h)
+      ctx.restore()
     }
   }
 

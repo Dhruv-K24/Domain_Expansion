@@ -24,7 +24,11 @@ async function call(url: string, body?: unknown) {
 }
 
 export async function loadDataset(): Promise<Sample[]> {
-  const data = await call('/api/dataset')
+  // Laptop dev server: live API (supports recording). Standalone build (phone): there is no
+  // server, so we fall back to the copy of signs.json that the build bundles next to the app.
+  let data
+  try { data = await call('/api/dataset') }
+  catch { data = await call(`${import.meta.env.BASE_URL}signs.json`) }
   if (!Array.isArray(data)) throw new Error('dataset file is not a list')
   return data
 }

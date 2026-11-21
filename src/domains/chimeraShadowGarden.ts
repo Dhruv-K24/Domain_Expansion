@@ -66,6 +66,7 @@ export class ChimeraShadowGarden extends Domain {
       duration: T.end,
       fadeOut: 900,
       title: { showDE: 1500, showName: 2300, fade: 6900, end: T.end },
+      post: { bloom: 1.5, threshold: 0.35, contrast: 1.1, vignette: 0.5 },
     })
   }
 

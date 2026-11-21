@@ -20,7 +20,7 @@ export type VeinPoint = { x: number; y: number; d: number; nx: number; ny: numbe
 export type Vein = { pts: VeinPoint[]; depth: number; seed: number; group: number }
 export type VeinOrigin = { x: number; y: number; angle: number; target?: { x: number; y: number } }
 
-const rand = (a: number, b: number) => a + Math.random() * (b - a)
+import { rand } from '../util/math'
 const wrap = (a: number) => Math.atan2(Math.sin(a), Math.cos(a)) // angle into -PI..PI
 
 /**

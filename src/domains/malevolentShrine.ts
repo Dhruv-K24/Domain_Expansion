@@ -58,6 +58,7 @@ export class MalevolentShrine extends Domain {
       title: { showDE: 100, showName: T.cut, fade: 5600, end: T.end },
       cutTitle: true,
       needsFace: true,
+      post: { bloom: 0.7, threshold: 0.55, contrast: 1.12, vignette: 0.45 },
     })
   }
 
@@ -96,7 +97,7 @@ export class MalevolentShrine extends Domain {
 
     const speckDt = dtMs * (0.35 + 0.65 * I) // chaos calms down at the end
     this.drawSpecks(ctx, speckDt, now, false, fxAmt * fade)
-    if (fxAmt > 0 && mask) this.body.draw(ctx, video, mask, w, h, fxAmt * fade)
+    if (fxAmt > 0 && mask) this.body.draw(ctx, video, mask, w, h, fxAmt * fade, '#fff', undefined, true) // black silhouette
     this.sukuna.draw(ctx, face, fxAmt * fade)
     this.drawSpecks(ctx, speckDt, now, true, fxAmt * fade)
 

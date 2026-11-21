@@ -8,10 +8,10 @@
 //
 // Like the body segmenter, it only runs while a domain that needs it is active.
 
+import { MODELS } from '../models'
 import { FilesetResolver, FaceLandmarker, type NormalizedLandmark } from '@mediapipe/tasks-vision'
 
-const MODEL =
-  'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task'
+const MODEL = MODELS.face
 
 // face outline, in order around the face (from MediaPipe's FACE_OVAL connections)
 export const FACE_OVAL = [
@@ -27,7 +27,7 @@ export class FaceTracker {
   private lastSeen = 0
 
   async load(delegate: 'GPU' | 'CPU') {
-    const vision = await FilesetResolver.forVisionTasks('/mediapipe-wasm')
+    const vision = await FilesetResolver.forVisionTasks(`${import.meta.env.BASE_URL}mediapipe-wasm`)
     this.lm = await FaceLandmarker.createFromOptions(vision, {
       baseOptions: { modelAssetPath: MODEL, delegate },
       runningMode: 'VIDEO',

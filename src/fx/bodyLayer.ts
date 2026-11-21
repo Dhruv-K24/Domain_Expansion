@@ -12,8 +12,12 @@ export class BodyLayer {
   private body = document.createElement('canvas')
   private edge = document.createElement('canvas')
 
-  /** @param tint optional colour your body gets washed in (e.g. dark blue for Chimera) */
-  draw(ctx: CanvasRenderingContext2D, video: HTMLVideoElement, mask: HTMLCanvasElement, w: number, h: number, amt: number, rim = '#fff', tint?: string) {
+  /**
+   * @param tint optional colour your body gets washed in (e.g. dark blue for Chimera)
+   * @param silhouette true = you become a solid BLACK shape (only the glowing rim shows), the
+   *   anime "character in shadow" look used by Sukuna and Gojo
+   */
+  draw(ctx: CanvasRenderingContext2D, video: HTMLVideoElement, mask: HTMLCanvasElement, w: number, h: number, amt: number, rim = '#fff', tint?: string, silhouette = false) {
     // PERFORMANCE: blur is expensive and its cost grows with pixel count. The glow and the
     // edge fade are blurry by nature, so we make them at 1/4 size (160x120 = 16x fewer pixels)
     // and let the browser stretch them up smoothly. Same look, a fraction of the cost.
@@ -40,6 +44,18 @@ export class BodyLayer {
     // ctx.filter (blend modes run on the GPU; filters on video frames are slower).
     b.globalCompositeOperation = 'source-over'
     b.clearRect(0, 0, w, h)
+    if (silhouette) {
+      // solid black body: skip the webcam image entirely
+      b.fillStyle = '#000'
+      b.fillRect(0, 0, w, h)
+      b.globalCompositeOperation = 'destination-in'
+      b.drawImage(mask, 0, 0, w, h)
+      b.globalCompositeOperation = 'source-over'
+      ctx.globalAlpha = amt
+      ctx.drawImage(this.body, 0, 0)
+      ctx.globalAlpha = 1
+      return
+    }
     b.drawImage(video, 0, 0, w, h)
     b.globalCompositeOperation = 'saturation' // take the saturation of grey -> mutes colours
     b.globalAlpha = 0.45

@@ -31,11 +31,6 @@ export class DomainTitle {
     document.body.append(this.el)
   }
 
-  /** shakeable element, so ScreenShake can include the title */
-  get element() {
-    return this.el
-  }
-
   play() {
     this.stop()
     const { showDE, showName, fade, end } = this.timing

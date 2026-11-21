@@ -5,17 +5,13 @@
 //   eye B: inner 362, outer 263, top 386, bottom 374
 //   face "up" direction: chin (152) -> forehead (10)
 //
-// Each eye is a BLADE shape (same generator as the Shrine slashes: tapered crescent).
+// Each eye is a red DIAMOND stretched long: 4 points — two sharp tips at the ends of a long
+// axis, and two side corners that set its thickness. Putting the side corners closer to the
+// INNER tip (not in the middle) makes it look like an eye narrowing toward the temple.
 //   upper eye: big, sweeps from your inner eye corner UP and OUT toward the temple
 //   lower eye: smaller, sits under your real eye, pointing outward
-//   + small tick marks, like the reference art.
-//
-// The blade shapes are generated ONCE per cast in a "unit" space (from (0,0) to (1,0)), then
-// each frame we move/rotate/scale that same shape onto your eyes. Generating a new random
-// shape every frame would make the eyes flicker.
 
 import { FACE_OVAL, type Face } from './faceTracker'
-import { makeBlade, bladePath, type Blade } from './blade'
 
 type V = { x: number; y: number }
 const add = (a: V, b: V, k = 1): V => ({ x: a.x + b.x * k, y: a.y + b.y * k })
@@ -28,20 +24,13 @@ const USED = [10, 152, 133, 33, 159, 145, 362, 263, 386, 374]
 export class SukunaFace {
   private shadow = document.createElement('canvas')
   private smooth = new Map<number, V>() // smoothed landmark positions (steadier eyes)
-  private shapes: { upper: Blade; lower: Blade } | null = null
 
   reset() {
     this.smooth.clear()
-    // unit-space shapes: thin crescents, belly on one side
-    this.shapes = {
-      upper: makeBlade(0, 0, 1, 0, 0.13, 0),
-      lower: makeBlade(0, 0, 1, 0, 0.12, 0),
-    }
   }
 
   draw(ctx: CanvasRenderingContext2D, face: Face | null, amt: number) {
     if (!face || amt <= 0) return
-    if (!this.shapes) this.reset()
     const { width: w, height: h } = ctx.canvas
 
     // smooth only the landmarks we use (lerp toward the new position each frame)
@@ -71,39 +60,29 @@ export class SukunaFace {
       const a2 = add(add(I, down, eyeH * 1.3), out, eyeW * 0.05)
       const b2 = add(add(O, out, eyeW * 0.45), down, eyeH * 0.55)
 
-      this.drawEye(ctx, this.shapes!.upper, a1, b1, down)
-      this.drawEye(ctx, this.shapes!.lower, a2, b2, down)
-
-      // tick marks
-      ctx.strokeStyle = '#ff2a00'
-      ctx.lineWidth = Math.max(1.5, eyeW * 0.06)
-      ctx.lineCap = 'round'
-      ctx.shadowColor = '#ff2a00'
-      ctx.shadowBlur = 8
-      const t1a = add(add(a1, up, eyeW * 0.3), out, eyeW * 0.25), t1b = add(add(a1, up, eyeW * 0.55), out, eyeW * 0.4)
-      const t2a = add(add(b2, up, eyeH * 0.9), out, -eyeW * 0.25), t2b = add(add(b2, up, eyeH * 1.4), out, -eyeW * 0.05)
-      ctx.beginPath()
-      ctx.moveTo(t1a.x, t1a.y); ctx.lineTo(t1b.x, t1b.y)
-      ctx.moveTo(t2a.x, t2a.y); ctx.lineTo(t2b.x, t2b.y)
-      ctx.stroke()
-      ctx.shadowBlur = 0
+      this.drawEye(ctx, a1, b1, 0.11, 0.38) // long, slim upper diamond
+      this.drawEye(ctx, a2, b2, 0.12, 0.42) // shorter lower diamond
     }
     ctx.restore()
   }
 
-  /** place a unit-space blade from a to b, with its fat side facing `belly` */
-  private drawEye(ctx: CanvasRenderingContext2D, shape: Blade, a: V, b: V, belly: V) {
+  /**
+   * A stretched diamond from tip a to tip b.
+   * @param thick  half-thickness as a fraction of its length (0.2 = long and slim)
+   * @param widest where along a->b the side corners sit (0.5 = symmetric, smaller = fat near a)
+   */
+  private drawEye(ctx: CanvasRenderingContext2D, a: V, b: V, thick: number, widest: number) {
     const d = sub(b, a), L = len(d)
-    const ang = Math.atan2(d.y, d.x)
-    // after rotating, local +y points to (-sin, cos). Flip if that's not toward the belly side.
-    const flip = -Math.sin(ang) * belly.x + Math.cos(ang) * belly.y < 0 ? -1 : 1
-    ctx.save()
-    ctx.translate(a.x, a.y)
-    ctx.rotate(ang)
-    ctx.scale(L, L * flip)
+    const n = { x: -d.y / L, y: d.x / L }              // sideways, perpendicular to the long axis
+    const mid = add(a, d, widest)                       // where the diamond is widest
+    const s1 = add(mid, n, L * thick), s2 = add(mid, n, -L * thick)
     ctx.beginPath()
-    bladePath(ctx, shape)
-    ctx.restore() // restore BEFORE filling so the glow isn't stretched by the scale
+    ctx.moveTo(a.x, a.y)
+    ctx.lineTo(s1.x, s1.y)
+    ctx.lineTo(b.x, b.y)
+    ctx.lineTo(s2.x, s2.y)
+    ctx.closePath()
+    ctx.lineJoin = 'miter'
     ctx.shadowColor = '#ff2a00'
     ctx.shadowBlur = 16 // only 4 eyes: shadowBlur is affordable here
     ctx.fillStyle = '#ff2200'

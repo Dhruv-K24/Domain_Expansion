@@ -8,9 +8,22 @@
 //    nothing, or an old tab that's out of date, can't wipe what's on disk.
 //  - Every change makes a timestamped backup first (data/backups, last 20 kept).
 //  - Every response says how many samples are now on disk, so the page can show proof.
+//
+// TWO PAGES, one codebase:
+//   index.html  laptop: training UI, HUD, test keys            npm run dev
+//   phone.html  phone:  camera + vignette + domains only       npm run dev:phone  (HTTPS on your Wi-Fi)
+// `npm run build` makes a standalone copy of both in dist/ (no server needed; the trained signs
+// are bundled as signs.json), ready to host on any HTTPS static host.
 import { defineConfig } from 'vite'
+import basicSsl from '@vitejs/plugin-basic-ssl'
 import fs from 'node:fs'
 import path from 'node:path'
+import crypto from 'node:crypto'
+import { MODELS } from './src/models'
+
+// `npm run dev:phone` runs `vite --mode phone`: serve on your local network over HTTPS.
+// Phones only allow the camera on HTTPS pages (or localhost), so plain http://<your-pc-ip> won't work.
+const PHONE = process.argv.includes('phone') // works the same on Windows / Mac / Linux
 
 const FILE = path.resolve('data/signs.json')
 const BACKUPS = path.resolve('data/backups')
@@ -46,9 +59,58 @@ function readBody(req: import('node:http').IncomingMessage): Promise<any> {
 }
 
 export default defineConfig({
-  // 127.0.0.1 (IPv4) explicitly: Claude's preview tool can't reach an IPv6-only server
-  server: { host: '127.0.0.1', watch: { ignored: ['**/data/**'] } },
+  base: './', // relative paths: the built app works from any folder or host
+  // laptop: 127.0.0.1 (Claude's preview tool can't reach an IPv6-only server)
+  // phone:  all network interfaces, so your phone can reach your PC over Wi-Fi
+  server: { host: PHONE ? true : '127.0.0.1', watch: { ignored: ['**/data/**'] } },
+  build: {
+    rollupOptions: {
+      input: { main: path.resolve('index.html'), phone: path.resolve('phone.html') },
+    },
+  },
   plugins: [
+    ...(PHONE ? [basicSsl()] : []), // a self-signed HTTPS certificate (your phone will warn once)
+    {
+      // copy the trained signs into the build, so the standalone app can recognise them
+      name: 'bundle-dataset',
+      apply: 'build',
+      generateBundle() {
+        this.emitFile({ type: 'asset', fileName: 'signs.json', source: fs.readFileSync(FILE, 'utf8') })
+      },
+    },
+    {
+      // OFFLINE: write dist/sw.js (from sw-template.js) with the exact list of files to save.
+      // Runs AFTER the build has written everything (closeBundle) and simply lists what's
+      // really in dist/ — so the list can't contain a file that doesn't exist (one missing
+      // file would make the whole offline install fail). Built names contain random hashes
+      // (main-Cc1-V49o.js), which is why this can't be a hand-written list.
+      // The version is a hash of every file's contents: any change = new version.
+      name: 'service-worker',
+      apply: 'build',
+      closeBundle() {
+        const out = path.resolve('dist')
+        const files: string[] = []
+        ;(function walk(dir: string, rel: string) {
+          for (const f of fs.readdirSync(dir).sort()) {
+            const p = path.join(dir, f), r = rel ? rel + '/' + f : f
+            if (fs.statSync(p).isDirectory()) walk(p, r); else if (r !== 'sw.js') files.push(r)
+          }
+        })(out, '')
+        const hash = crypto.createHash('sha1')
+        for (const f of files) hash.update(f).update(fs.readFileSync(path.join(out, f)))
+        // replace the exact CODE lines (not just the first match: the comment mentions them too)
+        const fill = (src: string, line: string, value: string) => {
+          if (!src.includes(line)) throw new Error('sw-template.js: missing line ' + line)
+          return src.replace(line, line.replace(/__[A-Z]+__/, value))
+        }
+        let source = fs.readFileSync('sw-template.js', 'utf8')
+        source = fill(source, "const CACHE = 'jjk-domains-__VERSION__'", hash.digest('hex').slice(0, 10))
+        source = fill(source, 'const FILES = __FILES__', JSON.stringify(files.map((f) => './' + f)))
+        source = fill(source, 'const MODELS = __MODELS__', JSON.stringify(Object.values(MODELS)))
+        fs.writeFileSync(path.join(out, 'sw.js'), source)
+        console.log(`  service worker: ${files.length} files saved for offline use`)
+      },
+    },
     {
       name: 'dataset-api',
       configureServer(server) {

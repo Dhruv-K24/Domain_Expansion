@@ -7,10 +7,10 @@
 //
 // It only runs while a domain is active, so normal play doesn't pay for it.
 
+import { MODELS } from '../models'
 import { FilesetResolver, ImageSegmenter } from '@mediapipe/tasks-vision'
 
-const MODEL =
-  'https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_segmenter/float16/latest/selfie_segmenter.tflite'
+const MODEL = MODELS.body
 
 export class BodyMask {
   canvas = document.createElement('canvas')            // the finished, feathered mask (what domains use)
@@ -24,7 +24,7 @@ export class BodyMask {
   ready = false
 
   async load(delegate: 'GPU' | 'CPU') {
-    const vision = await FilesetResolver.forVisionTasks('/mediapipe-wasm')
+    const vision = await FilesetResolver.forVisionTasks(`${import.meta.env.BASE_URL}mediapipe-wasm`)
     this.seg = await ImageSegmenter.createFromOptions(vision, {
       baseOptions: { modelAssetPath: MODEL, delegate },
       runningMode: 'VIDEO',

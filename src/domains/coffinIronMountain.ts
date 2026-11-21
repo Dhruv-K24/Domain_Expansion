@@ -10,11 +10,11 @@
 //   8.1  END      fades back to the room
 //
 // New here: procedural rocks (baked once, in a dark + a lit version that we crossfade), the lava
-// floor, embers, and the HeatHaze component. Reused: NoiseDissolve, BodyLayer, ScreenShake, title.
+// floor and embers. Heat haze + bloom come from the GPU post-processing (postFX.ts). Reused: NoiseDissolve, BodyLayer, ScreenShake, title.
 
 import { Domain, clamp01, rand, easeOut, type DomainInputs } from './domain'
 import { NoiseDissolve } from '../fx/noiseDissolve'
-import { HeatHaze } from '../fx/heatHaze'
+import { loadArt, drawCover } from '../fx/art'
 
 const T = {
   darken: 1200,
@@ -36,11 +36,11 @@ type Ember = { x: number; y: number; vx: number; vy: number; size: number; life:
 
 export class CoffinIronMountain extends Domain {
   private dark = new NoiseDissolve({ width: 160, height: 120, layers: [{ radius: 3, weight: 1.2 }], centreBias: -1 })
-  private haze = new HeatHaze()
   private rocks: Rock[] = []
   private embers: Ember[] = []
   private floorCracks = document.createElement('canvas')
   private ruptured = false
+  private bg: HTMLImageElement | null = null // your painted cave, if you've added one
 
   constructor() {
     super({
@@ -50,7 +50,10 @@ export class CoffinIronMountain extends Domain {
       duration: T.end,
       fadeOut: 900,
       title: { showDE: 2600, showName: 3200, fade: 7000, end: T.end },
+      post: { bloom: 1.0, threshold: 0.55, contrast: 1.12, vignette: 0.45, tint: [1.05, 0.97, 0.9] },
     })
+    // load art in the background at startup; until/unless it exists, the code-drawn cave is used
+    loadArt('coffin', 'bg').then((img) => { this.bg = img })
   }
 
   protected onStart() {
@@ -111,12 +114,44 @@ export class CoffinIronMountain extends Domain {
       ctx.globalAlpha = fade
     }
 
-    // ---- 2. lava floor: glows when the ground ruptures, blazes once the cave lights up
     const lavaK = Math.max(crackK * 0.6, light)
-    if (lavaK > 0) this.drawLava(ctx, secs, lavaK, fade)
+
+    if (this.bg) {
+      // ---- YOUR ART: the painted cave replaces the code-drawn rocks + lava.
+      // It fades in dark while slowly pushing in (the cave "forms around you"), then the
+      // eruption lifts the darkness off it, with a fire-like flicker.
+      const appear = clamp01((darkK - 0.4) / 0.6)
+      const zoom = 1.15 - 0.15 * easeOut(clamp01(t / 4000))
+      ctx.globalAlpha = fade * appear
+      drawCover(ctx, this.bg, zoom, 0, Math.sin(secs * 0.7) * 3)
+      const flicker = 0.92 + 0.08 * Math.sin(secs * 9) * Math.sin(secs * 5.3)
+      const darkness = 0.88 * (1 - lavaK * flicker)
+      ctx.globalAlpha = fade * appear * darkness
+      ctx.fillStyle = '#0a0302'
+      ctx.fillRect(0, 0, w, h)
+      // the rupture: a soft lava glow swells up from the bottom edge BEFORE the whole cave lights
+      // (no drawn cracks here: crisp code lines clash with painted art — keep it soft)
+      if (crackK > 0) {
+        const swell = crackK * (1 - light * 0.6)
+        const g = ctx.createLinearGradient(0, h, 0, h * (0.55 - 0.15 * crackK))
+        g.addColorStop(0, `rgba(255,170,60,${0.85 * swell})`)
+        g.addColorStop(0.4, `rgba(255,90,10,${0.45 * swell})`)
+        g.addColorStop(1, 'rgba(120,20,0,0)')
+        ctx.save()
+        ctx.globalCompositeOperation = 'lighter'
+        ctx.globalAlpha = fade
+        ctx.fillStyle = g
+        ctx.fillRect(0, 0, w, h)
+        ctx.restore()
+      }
+      ctx.globalAlpha = fade
+    } else {
+      // ---- 2. lava floor: glows when the ground ruptures, blazes once the cave lights up
+      if (lavaK > 0) this.drawLava(ctx, secs, lavaK, fade)
+    }
 
     // ---- 3. rocks slide in; each lands with a thud; later they're lit from below
-    for (const r of this.rocks) {
+    for (const r of this.bg ? [] : this.rocks) {
       const k = clamp01((t - T.rocksStart - r.delay) / (T.rocksLen * 0.6))
       if (k <= 0) continue
       if (!r.landed && k >= 1) { r.landed = true; this.shake.kick(7) }
@@ -151,8 +186,8 @@ export class CoffinIronMountain extends Domain {
       ctx.restore()
     }
 
-    // ---- 7. heat haze over the finished frame
-    this.haze.apply(ctx, secs, light * fade)
+    // ---- 7. heat haze: done on the GPU by the post-processing shader, rising with the light
+    this.post.distortion = 1.4 * light * fade
   }
 
   private drawLava(ctx: CanvasRenderingContext2D, secs: number, k: number, fade: number) {
