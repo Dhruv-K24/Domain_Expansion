@@ -389,8 +389,24 @@ if (import.meta.env.PROD && 'serviceWorker' in navigator) {
   navigator.serviceWorker.addEventListener('controllerchange', () => {
     if (hadController) location.reload()
   })
+  // a small badge so you can SEE an update downloading (and know to keep the app open)
+  const badge = (text: string) => {
+    let el = document.getElementById('updateBadge')
+    if (!el) { el = document.createElement('div'); el.id = 'updateBadge'; document.body.append(el) }
+    el.textContent = text
+  }
   navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' })
-    .then((reg) => reg.update()) // check for a new version every time the app opens
+    .then((reg) => {
+      reg.addEventListener('updatefound', () => {
+        if (!hadController) return // first install: nothing to replace, no badge needed
+        const sw = reg.installing
+        badge('Updating… keep the app open')
+        sw?.addEventListener('statechange', () => {
+          if (sw.state === 'redundant') badge('Update failed: will retry next time you open the app')
+        })
+      })
+      return reg.update() // check for a new version every time the app opens
+    })
     .catch((e) => console.warn('offline mode unavailable', e))
 }
 

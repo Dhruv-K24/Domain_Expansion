@@ -18,12 +18,30 @@ const MODELS = __MODELS__ // AI models hosted by Google
 self.addEventListener('install', (event) => {
   event.waitUntil((async () => {
     const cache = await caches.open(CACHE)
-    // cache: 'reload' = ALWAYS download from the server. Without it the browser may hand back a
-    // file it remembered earlier (GitHub lets browsers reuse files for 10 minutes), and the
-    // "new" version would get saved with old files mixed in.
-    await cache.addAll(FILES.map((f) => new Request(f, { cache: 'reload' })))
-    // models are big and on another server: don't let one failure break the whole install
-    await Promise.allSettled(MODELS.map((url) => cache.add(new Request(url, { mode: 'cors' }))))
+    // FAST UPDATES: the AI engine (mediapipe-wasm/, ~28MB) and the AI models (~12MB) never change
+    // between our builds, so if the phone already saved them in an older version, COPY them over
+    // instead of downloading again. An update then only downloads the small changed files (~2.5MB).
+    const reusable = (url) => url.includes('/mediapipe-wasm/') || MODELS.includes(url)
+    const reuse = async (url) => {
+      if (!reusable(new URL(url, location.href).href) && !reusable(url)) return false
+      const old = await caches.match(url) // searches the older versions' caches too
+      if (!old) return false
+      await cache.put(url, old)
+      return true
+    }
+    for (const f of FILES) {
+      if (await reuse(f)) continue
+      // cache: 'reload' = ALWAYS download from the server, never a file the browser remembered
+      // (GitHub lets browsers reuse files for 10 min: the "new" version could get old files)
+      const res = await fetch(new Request(f, { cache: 'reload' }))
+      if (!res.ok) throw new Error(`download failed: ${f} (${res.status})`)
+      await cache.put(f, res)
+    }
+    // models live on another server: one failure shouldn't break the whole install
+    await Promise.allSettled(MODELS.map(async (url) => {
+      if (await reuse(url)) return
+      await cache.add(new Request(url, { mode: 'cors' }))
+    }))
     await self.skipWaiting() // use the new version right away
   })())
 })
