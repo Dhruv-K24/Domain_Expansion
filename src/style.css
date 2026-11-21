@@ -235,3 +235,7 @@ body.play #tapHint { display: block; }
   .domain-title .name { font-size: 26px; letter-spacing: 0.15em; }
   .domain-title .half { font-size: 12px; letter-spacing: 0.5em; }
 }
+/* phone.html?debug: show the HUD and the guess box (for troubleshooting on the phone) */
+body.play.debug #hud, body.play.debug #cast { display: flex !important; }
+body.play.debug #cast { display: block !important; }
+body.play.debug #hud { font-size: 11px; flex-wrap: wrap; max-width: 92vw; }

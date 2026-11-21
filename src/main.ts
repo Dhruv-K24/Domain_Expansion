@@ -7,6 +7,7 @@ import { signFeatures } from './signs/features'
 import { classify, type Sample } from './signs/knn'
 import { DOMAINS, domainName, loadDataset, appendSamples, deleteLabel } from './signs/dataset'
 import { Caster } from './signs/caster'
+import { SignSmoother } from './signs/smoother'
 import { BodyMask } from './fx/segmenter'
 import { FaceTracker } from './fx/faceTracker'
 import type { Domain } from './domains/domain'
@@ -20,6 +21,8 @@ const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as 
 // PLAY MODE = the phone page (phone.html has <body class="play">). The laptop page (index.html)
 // is untouched: training UI, HUD, hand dots, test keys.
 const PLAY = document.body.classList.contains('play')
+// phone.html?debug shows the HUD + guess box on the phone, so you can see fps and what it thinks
+if (PLAY && new URLSearchParams(location.search).has('debug')) document.body.classList.add('debug')
 const video = $<HTMLVideoElement>('cam')
 const canvas = $<HTMLCanvasElement>('overlay')
 const ctx = canvas.getContext('2d')!
@@ -69,7 +72,8 @@ async function createDetectors() {
 
 async function startCamera() {
   const stream = await navigator.mediaDevices.getUserMedia({
-    video: { width: 640, height: 480, frameRate: { ideal: 60 }, facingMode: 'user' }, // front camera on phones
+    // front camera on phones; phones ask for 30fps (less work per second, smoother on weaker chips)
+    video: { width: 640, height: 480, frameRate: { ideal: PLAY ? 30 : 60 }, facingMode: 'user' },
   })
   video.srcObject = stream
   await new Promise<void>((r) => (video.onloadedmetadata = () => r()))
@@ -125,7 +129,9 @@ function startRecording() {
 let datasetReady = false
 loadDataset()
   .then((d) => {
-    samples = d
+    // phone: keep every 2nd sample. Neighbouring frames of a recording are near-identical, so
+    // this halves the per-frame work of comparing against every sample, with almost no accuracy loss.
+    samples = PLAY ? d.filter((_, i) => i % 2 === 0) : d
     datasetReady = true
     recordInfo.textContent = `Loaded ${d.length} saved samples ✔`
     renderCounts()
@@ -198,6 +204,7 @@ async function main() {
     const draw = new DrawingUtils(ctx)
     const tracker = new HandTracker()
     const caster = new Caster()
+    const smoother = new SignSmoother()
     // Every domain with a full effect. Adding one = write its file + add it here.
     const domains: Domain[] = [new MalevolentShrine(), new UnlimitedVoid(), new ChimeraShadowGarden(), new CoffinIronMountain()]
     const activeDomain = () => domains.find((d) => d.active) ?? null
@@ -238,7 +245,9 @@ async function main() {
         const handedness: Category[][] = [...result.handedness]
 
         // Recovery pass: for each lost hand, search a zoomed crop around where we predict it is.
-        for (const lost of tracker.lostHands(landmarks, now).slice(0, 1)) { // max 1 per frame (cost)
+        // (phone: only every 3rd frame — it's a second full detection, expensive on a phone chip)
+        const tryRecover = !PLAY || detFrames % 3 === 0
+        for (const lost of tryRecover ? tracker.lostHands(landmarks, now).slice(0, 1) : []) { // max 1 per frame
           const r = recoverHand(det.image, video, lost.center, lost.size, lost.searchScale)
           if (r) { landmarks.push(r.landmarks); handedness.push(r.handedness); recovered++ }
         }
@@ -248,7 +257,8 @@ async function main() {
         detFrames++
 
         // ---- Signs ----
-        const f = signFeatures(hands.filter((h) => !h.coasting))
+        // aspect ratio of the camera: fixes squashed hand shapes on portrait phone cameras
+        const f = signFeatures(hands.filter((h) => !h.coasting), video.videoWidth / video.videoHeight)
         // Recording: save this frame's features as an example of the chosen sign
         if (recordingUntil && f && now >= recordStartsAt) {
           current.push({ label: domainSelect.value, f, rec: recId })
@@ -269,7 +279,8 @@ async function main() {
         }
 
         // Classify (paused while recording so it doesn't fire on itself)
-        const pred = f && !recordingUntil ? classify(samples, f) : { label: 'none', confidence: 0, distance: Infinity }
+        const rawPred = f && !recordingUntil ? classify(samples, f) : { label: 'none', confidence: 0, distance: Infinity }
+        const pred = smoother.update(rawPred) // smoothed over the last few frames: no flicker
         const state = caster.update(pred, now)
         castLabel.textContent = pred.label === 'none' ? '—' : domainName(pred.label)
         castMeta.textContent = f
