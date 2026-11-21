@@ -211,10 +211,22 @@ async function main() {
     const domains: Domain[] = [new MalevolentShrine(), new UnlimitedVoid(), new ChimeraShadowGarden(), new CoffinIronMountain()]
     const activeDomain = () => domains.find((d) => d.active) ?? null
     const domainActive = () => activeDomain() !== null
+    // Body + face models load in the background, then WARM UP: run each once on the camera.
+    // A model's first run is slow (the GPU compiles its programs; on a phone that can freeze
+    // things for a second+). Doing it now, while idle, means it never lands mid-domain.
     const face = new FaceTracker()
-    face.load(det.delegate).catch((e) => console.warn('face tracker failed to load', e))
     const body = new BodyMask()
-    body.load(det.delegate).catch((e) => console.warn('segmenter failed to load', e)) // loads in background
+    const warmUp = (name: string, run: () => void) => {
+      const t0 = performance.now()
+      try { run() } catch (e) { console.warn(name + ' warm-up failed', e) }
+      console.info(`${name} warmed up in ${Math.round(performance.now() - t0)}ms`)
+    }
+    ;(async () => {
+      try { await body.load(det.delegate); warmUp('body model', () => { body.update(video, performance.now()); body.reset() }) }
+      catch (e) { console.warn('segmenter failed to load', e) }
+      try { await face.load(det.delegate); warmUp('face model', () => { face.update(video, performance.now()); face.clear() }) }
+      catch (e) { console.warn('face tracker failed to load', e) }
+    })()
     let wasCast = false
     let lastFrame = performance.now()
     let segTick = 0

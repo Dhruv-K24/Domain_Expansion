@@ -39,6 +39,8 @@ export type DomainConfig = {
 export abstract class Domain {
   readonly cfg: DomainConfig
   protected started = 0
+  /** domain time in ms: advances by FRAMES SHOWN (max 50ms per frame), not by the wall clock */
+  private elapsed = 0
   protected w = 640
   protected h = 480
   protected body = new BodyLayer()
@@ -58,12 +60,17 @@ export abstract class Domain {
   get needsFace() { return !!this.cfg.needsFace }
 
   get active() {
-    return this.started > 0 && performance.now() - this.started < this.cfg.duration
+    return this.started > 0 && this.elapsed < this.cfg.duration
   }
 
-  /** ms since the cast */
+  /**
+   * ms since the cast, in DOMAIN TIME. If the device freezes for a moment (a phone preparing an AI
+   * model the first time can stall for a second+), wall-clock time would jump straight past the
+   * start of the animation. Domain time only advances by what was actually shown (each frame
+   * counts at most 50ms), so a stall pauses the animation instead of skipping part of it.
+   */
   protected get t() {
-    return performance.now() - this.started
+    return this.elapsed
   }
 
   /** 1 normally, sliding to 0 during the last `fadeOut` ms */
@@ -73,6 +80,7 @@ export abstract class Domain {
 
   start(w: number, h: number) {
     this.started = performance.now()
+    this.elapsed = 0
     this.w = w
     this.h = h
     this.wasActive = true
@@ -84,10 +92,13 @@ export abstract class Domain {
   render(ctx: CanvasRenderingContext2D, inputs: DomainInputs, dtMs: number) {
     ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height)
     if (!this.active) {
-      if (this.wasActive) { this.wasActive = false; this.shake.reset(); this.onEnd() } // clean up once
+      if (this.wasActive) { this.wasActive = false; this.shake.reset(); this.title.stop(); this.onEnd() } // clean up once
       return
     }
-    this.draw(ctx, inputs, this.t, dtMs)
+    const step = Math.min(dtMs, 50)
+    this.elapsed += step
+    this.title.tick(this.elapsed)
+    this.draw(ctx, inputs, this.elapsed, step)
     ctx.globalAlpha = 1
   }
 

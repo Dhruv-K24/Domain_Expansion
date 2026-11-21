@@ -10,7 +10,6 @@ export type TitleTiming = { showDE: number; showName: number; fade: number; end:
 
 export class DomainTitle {
   private el: HTMLDivElement
-  private timers: number[] = []
   private timing: TitleTiming
   private cut: boolean
 
@@ -33,19 +32,21 @@ export class DomainTitle {
 
   play() {
     this.stop()
+    this.el.classList.add('on')
+  }
+
+  /** called every frame with the domain's time: add each class once its moment arrives.
+   *  (Driven by domain time, not timers, so the title stays in sync if the animation pauses.) */
+  tick(t: number) {
     const { showDE, showName, fade, end } = this.timing
     const cl = this.el.classList
-    cl.add('on')
-    const at = (ms: number, fn: () => void) => this.timers.push(window.setTimeout(fn, ms))
-    at(showDE, () => cl.add('s1'))
-    at(showName, () => { cl.add('s2'); if (this.cut) cl.add('cut') })
-    at(fade, () => cl.add('fade'))
-    at(end, () => this.stop())
+    if (t >= showDE) cl.add('s1')
+    if (t >= showName) { cl.add('s2'); if (this.cut) cl.add('cut') }
+    if (t >= fade) cl.add('fade')
+    if (t >= end) this.stop()
   }
 
   stop() {
-    this.timers.forEach(clearTimeout)
-    this.timers = []
     this.el.classList.remove('on', 's1', 's2', 'cut', 'fade')
   }
 }
